@@ -20,7 +20,7 @@ def get_ocr_reader():
     global reader
     if reader is None:
         print("กำลังโหลด EasyOCR (ครั้งแรก)...")
-        reader = easyocr.Reader(['en'], gpu=False)
+        reader = easyocr.Reader(['ja','en'], gpu=False)
         print("โหลด OCR เสร็จสิ้น")
     return reader
 
