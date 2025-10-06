@@ -14,14 +14,13 @@ STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
 # โหลด OCR ครั้งเดียวตอนเริ่ม
-print("กำลังโหลด EasyOCR (อาจใช้เวลา 10-30 วินาที)...")
+print("กำลังโหลด EasyOCR...")
 reader = easyocr.Reader(['ja', 'ko', 'en', 'zh-cn', 'zh-tw'], gpu=False)
 print("โหลด OCR เสร็จสิ้น")
 
 # ฟอนต์ภาษาไทย (ดาวน์โหลดมาแล้ววางในโฟลเดอร์เดียวกัน)
 FONT_PATH = "NotoSansThai-Regular.ttf"
 if not os.path.exists(FONT_PATH):
-    # ดาวน์โหลดฟอนต์ถ้ายังไม่มี
     print("กำลังดาวน์โหลดฟอนต์ภาษาไทย...")
     r = requests.get("https://github.com/googlefonts/noto-fonts/raw/main/unhinted/ttf/NotoSansThai/NotoSansThai-Regular.ttf")
     with open(FONT_PATH, "wb") as f:
