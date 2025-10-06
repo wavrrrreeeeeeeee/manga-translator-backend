@@ -13,12 +13,18 @@ app = Flask(__name__)
 STATIC_DIR = "static"
 os.makedirs(STATIC_DIR, exist_ok=True)
 
-# โหลด OCR ครั้งเดียวตอนเริ่ม
-print("กำลังโหลด EasyOCR...")
-reader = easyocr.Reader(['ja', 'ko', 'en', 'zh-cn', 'zh-tw'], gpu=False)
-print("โหลด OCR เสร็จสิ้น")
+# สร้างตัวแปร global สำหรับ OCR (จะโหลดครั้งแรกเมื่อมี request)
+reader = None
 
-# ฟอนต์ภาษาไทย (ดาวน์โหลดมาแล้ววางในโฟลเดอร์เดียวกัน)
+def get_ocr_reader():
+    global reader
+    if reader is None:
+        print("กำลังโหลด EasyOCR (ครั้งแรก)...")
+        reader = easyocr.Reader(['ja', 'ko', 'en', 'zh-cn', 'zh-tw'], gpu=False)
+        print("โหลด OCR เสร็จสิ้น")
+    return reader
+
+# ฟอนต์ภาษาไทย
 FONT_PATH = "NotoSansThai-Regular.ttf"
 if not os.path.exists(FONT_PATH):
     print("กำลังดาวน์โหลดฟอนต์ภาษาไทย...")
@@ -28,7 +34,6 @@ if not os.path.exists(FONT_PATH):
 
 def translate_text(text, target_lang="th"):
     try:
-        # ใช้ LibreTranslate สาธารณะ (ฟรี)
         res = requests.post("https://libretranslate.com/translate", json={
             "q": text,
             "source": "auto",
@@ -44,6 +49,7 @@ def translate_text(text, target_lang="th"):
 
 @app.route('/translate', methods=['POST'])
 def translate_image():
+    global reader
     data = request.json
     image_url = data.get('image_url')
     target_lang = data.get('target_lang', 'th')
@@ -52,6 +58,9 @@ def translate_image():
         return jsonify({"error": "ต้องระบุ image_url"}), 400
 
     try:
+        # โหลด OCR ถ้ายังไม่ได้โหลด
+        ocr_reader = get_ocr_reader()
+
         # ดาวน์โหลดรูป
         img_resp = requests.get(image_url, timeout=15)
         img_resp.raise_for_status()
@@ -60,7 +69,7 @@ def translate_image():
         img_cv = cv2.cvtColor(img_cv, cv2.COLOR_RGB2BGR)
 
         # OCR
-        results = reader.readtext(img_cv)
+        results = ocr_reader.readtext(img_cv)
 
         # ประมวลผลแต่ละกล่องข้อความ
         output_img = img_cv.copy()
@@ -68,17 +77,15 @@ def translate_image():
         draw = ImageDraw.Draw(pil_output)
 
         for (bbox, text, prob) in results:
-            if prob < 0.3:  # ความมั่นใจต่ำเกินไป ข้าม
+            if prob < 0.3:
                 continue
 
-            # ลบข้อความเดิม: ปิดทับด้วยค่าเฉลี่ยพื้นหลัง
             pts = np.array(bbox, dtype=np.int32)
             x_min = min(p[0] for p in pts)
             y_min = min(p[1] for p in pts)
             x_max = max(p[0] for p in pts)
             y_max = max(p[1] for p in pts)
 
-            # ขยายกล่องเล็กน้อย
             pad = 2
             x_min = max(0, x_min - pad)
             y_min = max(0, y_min - pad)
@@ -90,16 +97,13 @@ def translate_image():
                 avg_color = np.mean(roi, axis=(0,1)).astype(int)
                 cv2.rectangle(output_img, (x_min, y_min), (x_max, y_max), avg_color.tolist(), -1)
 
-            # แปลข้อความ
             translated = translate_text(text, target_lang)
 
-            # วาดคำแปลใหม่
             try:
                 font_size = max(14, int((y_max - y_min) * 0.8))
                 font = ImageFont.truetype(FONT_PATH, font_size)
                 draw.text((x_min, y_min), translated, fill=(0, 0, 0), font=font)
             except:
-                # fallback
                 draw.text((x_min, y_min), translated, fill=(0, 0, 0))
 
         # บันทึกไฟล์
