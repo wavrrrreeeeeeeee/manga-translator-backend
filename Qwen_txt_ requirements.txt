@@ -1,0 +1,6 @@
+flask
+easyocr
+pillow
+requests
+opencv-python-headless
+numpy
